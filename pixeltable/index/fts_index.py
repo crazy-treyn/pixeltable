@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import re
+
 import sqlalchemy as sql
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.schema import CreateIndex
-
 import pixeltable.catalog as catalog
 import pixeltable.exceptions as excs
 import pixeltable.exprs as exprs
@@ -11,6 +11,9 @@ import pixeltable.type_system as ts
 from pixeltable.env import Env
 
 from .base import IndexBase
+
+# PostgreSQL text search config names (e.g. english, french). Used to build 'name'::regconfig safely.
+_FTS_LANG_RE = re.compile(r'^[a-z][a-z0-9_]*$')
 
 
 class FtsIndex(IndexBase):
@@ -29,6 +32,15 @@ class FtsIndex(IndexBase):
                 f'Cannot create full-text search index on column {column.name!r}: '
                 f'requires String type, got {column.col_type}'
             )
+        if not _FTS_LANG_RE.match(self.language):
+            raise excs.Error(
+                f'Invalid FTS language {self.language!r}; use a PostgreSQL text search config name (e.g. english)'
+            )
+
+    def _regconfig(self) -> sql.ColumnElement:
+        """SQL fragment ``'name'::regconfig`` for use in to_tsvector / websearch_to_tsquery."""
+        assert _FTS_LANG_RE.match(self.language)
+        return sql.literal_column(f"'{self.language}'::regconfig")
 
     def create_value_expr(self, c: catalog.Column) -> exprs.Expr:
         if not c.col_type.is_string_type():
@@ -44,10 +56,15 @@ class FtsIndex(IndexBase):
     def sa_create_stmt(self, store_index_name: str, sa_value_col: sql.Column) -> sql.Compiled:
         if Env.get().is_using_cockroachdb:
             raise excs.Error('Full-text search indexes are only supported on PostgreSQL')
-        # Expression index: GIN over to_tsvector(language, text_col)
-        tsvec = sql.func.to_tsvector(self.language, sa_value_col)
-        sa_idx = sql.Index(store_index_name, tsvec, postgresql_using='gin')
-        return CreateIndex(sa_idx, if_not_exists=True).compile(dialect=postgresql.dialect())
+        # Expression GIN index: SQLAlchemy Index() does not reliably attach expression indexes to the table.
+        assert _FTS_LANG_RE.match(self.language)
+        table_ref = sa_value_col.table.fullname
+        col = sa_value_col.name
+        stmt = sql.text(
+            f'CREATE INDEX IF NOT EXISTS {store_index_name} ON {table_ref} '
+            f'USING gin (to_tsvector(\'{self.language}\'::regconfig, {col}))'
+        )
+        return stmt.compile(dialect=postgresql.dialect())
 
     def sa_drop_stmt(self, store_index_name: str, sa_value_col: sql.Column) -> sql.Compiled:
         # Drop by index name only (expression indexes are not tied to a simple column list).
@@ -59,8 +76,8 @@ class FtsIndex(IndexBase):
             raise excs.Error('search(): query must be a string')
         q = query_literal.val
         assert isinstance(q, str)
-        tsvec = sql.func.to_tsvector(self.language, val_column.sa_col)
-        tsq = sql.func.websearch_to_tsquery(self.language, q)
+        tsvec = sql.func.to_tsvector(self._regconfig(), val_column.sa_col)
+        tsq = sql.func.websearch_to_tsquery(self._regconfig(), sql.literal(q, type_=sql.String()))
         return tsvec.op('@@')(tsq)
 
     def rank_clause(self, val_column: catalog.Column, query_literal: exprs.Literal) -> sql.ColumnElement:
@@ -69,8 +86,8 @@ class FtsIndex(IndexBase):
             raise excs.Error('search(): query must be a string')
         q = query_literal.val
         assert isinstance(q, str)
-        tsvec = sql.func.to_tsvector(self.language, val_column.sa_col)
-        tsq = sql.func.websearch_to_tsquery(self.language, q)
+        tsvec = sql.func.to_tsvector(self._regconfig(), val_column.sa_col)
+        tsq = sql.func.websearch_to_tsquery(self._regconfig(), sql.literal(q, type_=sql.String()))
         return sql.func.ts_rank(tsvec, tsq)
 
     @classmethod

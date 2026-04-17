@@ -104,11 +104,9 @@ class TestFtsIndex:
         t = pxt.create_table('fts_fr', {'text': pxt.String}, if_exists='replace')
         t.insert([{'text': 'Les chats sont dans le jardin.'}])
         t.add_fts_index('text', language='french')
-        idx = t._tbl_version.get().idxs_by_name
-        assert len(idx) == 1
-        info = next(iter(idx.values()))
-        assert isinstance(info.idx, FtsIndex)
-        assert info.idx.language == 'french'
+        fts_infos = [i for i in t._tbl_version.get().idxs_by_name.values() if isinstance(i.idx, FtsIndex)]
+        assert len(fts_infos) == 1
+        assert fts_infos[0].idx.language == 'french'
         res = t.where(t.text.search('chat')).select(t.text).collect()
         assert len(res) == 1
 

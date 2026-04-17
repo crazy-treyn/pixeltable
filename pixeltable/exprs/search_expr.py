@@ -11,7 +11,6 @@ import pixeltable.exceptions as excs
 import pixeltable.type_system as ts
 from pixeltable.catalog.globals import QColumnId
 from pixeltable.catalog.table_version import TableVersionKey
-from pixeltable.index.fts_index import FtsIndex
 
 from ..runtime import get_runtime
 from .column_ref import ColumnRef
@@ -59,6 +58,8 @@ class SearchExpr(Expr):
                 raise excs.Error(
                     f'Column {self.qcol_id!r} not found in table version {self.table_version_key!r} or its bases'
                 )
+
+        from pixeltable.index import FtsIndex
 
         idx_info = tv.get_idx(column, self.idx_name, FtsIndex)
         idx = idx_info.idx
@@ -144,7 +145,6 @@ class SearchExpr(Expr):
         if not isinstance(self.components[0], Literal):
             raise excs.Error('search(): requires a literal string query, not an expression')
         idx_info = self._resolve_idx()
-        assert isinstance(idx_info.idx, FtsIndex)
         return idx_info.idx.match_clause(idx_info.val_col, self.components[0])
 
     def eval(self, data_row: DataRow, row_builder: RowBuilder) -> None:
@@ -166,6 +166,8 @@ class SearchExpr(Expr):
         return cls(item=components[0], idx_name=idx_name, table_version_key=table_version_key, qcol_id=qcol_id)
 
     def _resolve_idx(self, validate_initialized: bool = True) -> 'catalog.TableVersion.IndexInfo':
+        from pixeltable.index import FtsIndex
+
         tbl_version = get_runtime().catalog.get_tbl_version(
             self.table_version_key, validate_initialized=validate_initialized
         )
@@ -217,6 +219,8 @@ class SearchRankExpr(Expr):
             raise excs.Error(
                 f'Column {self.qcol_id!r} not found in table version {self.table_version_key!r} or its bases'
             )
+
+        from pixeltable.index import FtsIndex
 
         idx_info = tv.get_idx(column, self.idx_name, FtsIndex)
         assert isinstance(idx_info.idx, FtsIndex)
@@ -275,14 +279,12 @@ class SearchRankExpr(Expr):
         if not isinstance(self.components[0], Literal):
             raise excs.Error('search().rank: requires a literal string query, not an expression')
         idx_info = self._resolve_idx()
-        assert isinstance(idx_info.idx, FtsIndex)
         return idx_info.idx.rank_clause(idx_info.val_col, self.components[0])
 
     def as_order_by_clause(self, is_asc: bool) -> sql.ColumnElement | None:
         if not isinstance(self.components[0], Literal):
             raise excs.Error('search().rank: requires a literal string query, not an expression')
         idx_info = self._resolve_idx()
-        assert isinstance(idx_info.idx, FtsIndex)
         r = idx_info.idx.rank_clause(idx_info.val_col, self.components[0])
         return r.asc() if is_asc else r.desc()
 
@@ -305,6 +307,8 @@ class SearchRankExpr(Expr):
         return cls(item=components[0], idx_name=idx_name, table_version_key=table_version_key, qcol_id=qcol_id)
 
     def _resolve_idx(self, validate_initialized: bool = True) -> 'catalog.TableVersion.IndexInfo':
+        from pixeltable.index import FtsIndex
+
         tbl_version = get_runtime().catalog.get_tbl_version(
             self.table_version_key, validate_initialized=validate_initialized
         )
