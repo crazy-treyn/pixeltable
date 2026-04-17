@@ -11,6 +11,8 @@ Run from the repository root with `pixeltable` importable (editable install is t
   pip install -e .
   python tool/marimo_fts_demo.py
 
+Each run deletes and recreates `tool/.marimo_fts_demo/` (Pixeltable home for this demo) so you can rerun from a clean state.
+
 Interactive UI:
 
   marimo run tool/marimo_fts_demo.py
@@ -29,7 +31,7 @@ this notebook configures the same variables as `tests/conftest.py` for local emb
 
 import marimo
 
-__generated_with = "0.20.4"
+__generated_with = "0.23.1"
 app = marimo.App(width="medium")
 
 
@@ -37,7 +39,7 @@ app = marimo.App(width="medium")
 def _():
     import marimo as mo
     import os
-    import tempfile
+    import shutil
     import uuid
     from pathlib import Path
 
@@ -45,11 +47,11 @@ def _():
     from pixeltable.config import Config
     from pixeltable.env import Env
 
-    return Config, Env, Path, mo, os, pxt, tempfile, uuid
+    return Config, Env, Path, mo, os, pxt, shutil, uuid
 
 
 @app.cell
-def _(Config, Env, Path, mo, os, pxt, tempfile, uuid):
+def _(Config, Env, Path, mo, os, pxt, shutil, uuid):
     # Configure env and initialize Pixeltable (embedded Postgres).
     repo_root = Path(__file__).resolve().parent.parent
     os.chdir(repo_root)
@@ -57,9 +59,13 @@ def _(Config, Env, Path, mo, os, pxt, tempfile, uuid):
     shared_home = Path.home() / ".pixeltable"
     shared_home.mkdir(parents=True, exist_ok=True)
 
-    demo_base = Path(tempfile.mkdtemp(prefix="pxt_marimo_fts_"))
-    home_dir = demo_base / ".pixeltable"
-    home_dir.mkdir(parents=True, exist_ok=True)
+    # Stable demo workspace: remove and recreate so each run starts clean (rerunnable script).
+    demo_root = repo_root / "tool" / ".marimo_fts_demo"
+    if demo_root.exists():
+        shutil.rmtree(demo_root)
+    demo_root.mkdir(parents=True)
+    home_dir = demo_root / ".pixeltable"
+    home_dir.mkdir(parents=True)
 
     os.environ["PIXELTABLE_HOME"] = str(home_dir)
     os.environ["PIXELTABLE_CONFIG"] = str(shared_home / "config.toml")
@@ -76,11 +82,14 @@ def _(Config, Env, Path, mo, os, pxt, tempfile, uuid):
 
     fts_available = not Env.get().is_using_cockroachdb
     env_banner = mo.md(
+        f"**Demo dir (wiped each run):** `{demo_root}`  \n"
         f"**PIXELTABLE_HOME:** `{home_dir}`  \n"
         f"**PIXELTABLE_DB:** `{os.environ['PIXELTABLE_DB']}`  \n"
         f"**FTS available:** `{fts_available}` (not on CockroachDB)  \n"
         f"**reinit_db:** `{reinit_db}`"
     )
+
+    env_banner
     return env_banner, fts_available
 
 
@@ -126,7 +135,9 @@ def _(fts_available, mo, pxt):
             None,
             mo.md("**Full-text search** requires PostgreSQL. Skipping demo on CockroachDB."),
         )
-    return jump_out, or_out, ranked_out, summary_out
+
+    summary
+    return jump_rows, or_rows, ranked, summary
 
 
 @app.cell
@@ -144,7 +155,16 @@ def _(fts_available, mo, pxt):
 
 
 @app.cell
-def _(env_banner, fts_available, fr_md, jump_rows, mo, or_rows, ranked, summary):
+def _(
+    env_banner,
+    fr_md,
+    fts_available,
+    jump_rows,
+    mo,
+    or_rows,
+    ranked,
+    summary,
+):
     # Show structured results (marimo renders the last expression).
     import pandas as pd
 
