@@ -22,7 +22,7 @@ BASIC_PLATFORMS = ('macos-15', 'windows-2022')
 EXPENSIVE_PLATFORMS = ('ubuntu-small-t4',)
 ALTERNATIVE_PLATFORMS = ('ubuntu-24.04-arm', 'macos-15-intel')
 
-COCKROACH_TEST_MODULES = ('table', 'index')
+COCKROACH_TEST_MODULES = ('table', 'index', 'fts_index')
 
 
 class MatrixConfig(NamedTuple):

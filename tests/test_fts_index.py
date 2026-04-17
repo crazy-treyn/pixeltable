@@ -143,6 +143,7 @@ class TestFtsIndex:
         with pytest.raises(pxt.Error, match='multiple indices'):
             t.drop_fts_index(column='text')
 
+    @pytest.mark.cockroachdb
     def test_fts_raises_on_cockroach(self) -> None:
         if not Env.get().is_using_cockroachdb:
             pytest.skip('Requires CockroachDB')
