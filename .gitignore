@@ -15,6 +15,7 @@ __pycache__
 /docs/local/
 /local/
 /tool/.marimo_fts_demo/
+__marimo__/
 /pixeltable/_version.py
 /pixeltable/dashboard/static/
 /target/

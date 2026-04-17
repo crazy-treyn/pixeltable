@@ -151,6 +151,8 @@ def _(fts_available, mo, pxt):
         fr_md = mo.md(f"**French index, query `chat`:** {len(fr_hits)} row(s)")
     else:
         fr_md = mo.md("")
+
+    fr_md
     return (fr_md,)
 
 
