@@ -1170,6 +1170,80 @@ class Table(SchemaObject):
 
             self._drop_index(col=col, idx_name=idx_name, _idx_class=index.EmbeddingIndex, if_not_exists=if_not_exists)
 
+    def add_fts_index(
+        self,
+        column: str | ColumnRef,
+        *,
+        idx_name: str | None = None,
+        language: str = 'english',
+        if_exists: Literal['error', 'ignore', 'replace', 'replace_force'] = 'error',
+    ) -> None:
+        """
+        Add a PostgreSQL full-text search (GIN) index on a string column.
+        The index stays in sync on insert/update/delete.
+
+        Args:
+            column: The name or reference of the string column to index.
+            idx_name: Optional name for the index (defaults to ``idx{n}``).
+            language: PostgreSQL text search configuration (e.g. ``'english'``, ``'french'``).
+            if_exists: Behavior when an index with the same name exists (same semantics as ``add_embedding_index``).
+
+        Raises:
+            Error: If the database is not PostgreSQL, the column is not a string, or index creation fails.
+        """
+        if env.Env.get().is_using_cockroachdb:
+            raise excs.Error('Full-text search indexes are only supported on PostgreSQL')
+
+        with get_runtime().catalog.begin_xact(tbl=self._tbl_version_path, for_write=True, lock_mutable_tree=True):
+            self.__check_mutable('add an index to')
+            col = self._resolve_column_parameter(column)
+
+            if idx_name is not None and idx_name in self._tbl_version.get().idxs_by_name:
+                if_exists_ = IfExistsParam.validated(if_exists, 'if_exists')
+                if if_exists_ == IfExistsParam.ERROR:
+                    raise excs.Error(f'Duplicate index name: {idx_name}')
+                if not isinstance(self._tbl_version.get().idxs_by_name[idx_name].idx, index.FtsIndex):
+                    raise excs.Error(
+                        f'Index {idx_name!r} is not a full-text search index. Cannot {if_exists_.name.lower()} it.'
+                    )
+                if if_exists_ == IfExistsParam.IGNORE:
+                    return
+                assert if_exists_ in (IfExistsParam.REPLACE, IfExistsParam.REPLACE_FORCE)
+                self.drop_fts_index(idx_name=idx_name)
+                assert idx_name not in self._tbl_version.get().idxs_by_name
+
+            from pixeltable.index import FtsIndex
+
+            if idx_name is not None:
+                Column.validate_name(idx_name)
+
+            idx = FtsIndex(language=language, column=col)
+            _ = idx.create_value_expr(col)
+            _ = self._tbl_version.get().add_index(col, idx_name=idx_name, idx=idx)
+            FileCache.get().emit_eviction_warnings()
+
+    def drop_fts_index(
+        self,
+        *,
+        column: str | ColumnRef | None = None,
+        idx_name: str | None = None,
+        if_not_exists: Literal['error', 'ignore'] = 'error',
+    ) -> None:
+        """
+        Drop a full-text search index. Specify either ``column`` (when exactly one FTS index exists on it) or
+        ``idx_name``.
+        """
+        if (column is None) == (idx_name is None):
+            raise excs.Error("Exactly one of 'column' or 'idx_name' must be provided")
+
+        with get_runtime().catalog.begin_xact(tbl=self._tbl_version_path, for_write=True, lock_mutable_tree=True):
+            col: Column = None
+            if idx_name is None:
+                col = self._resolve_column_parameter(column)
+                assert col is not None
+
+            self._drop_index(col=col, idx_name=idx_name, _idx_class=index.FtsIndex, if_not_exists=if_not_exists)
+
     def _resolve_column_parameter(self, column: str | ColumnRef) -> Column:
         """Resolve a column parameter to a Column object"""
         col: Column = None
@@ -1267,6 +1341,8 @@ class Table(SchemaObject):
                 assert if_not_exists_ == IfNotExistsParam.IGNORE
                 return
             idx_info = self._tbl_version.get().idxs_by_name[idx_name]
+            if _idx_class is not None and not isinstance(idx_info.idx, _idx_class):
+                raise excs.Error(f'Index {idx_name!r} is not a {_idx_class.display_name()} index')
         else:
             if col.get_tbl().id != self._tbl_version.id:
                 raise excs.Error(

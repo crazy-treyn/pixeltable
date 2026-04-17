@@ -226,7 +226,7 @@ class SqlNode(ExecNode):
 
         order_by_clause: list[sql.ColumnElement] = []
         for e, asc in self.order_by_clause:
-            if isinstance(e, exprs.SimilarityExpr):
+            if isinstance(e, (exprs.SimilarityExpr, exprs.SearchRankExpr)):
                 order_by_clause.append(e.as_order_by_clause(asc))
             else:
                 order_by_clause.append(self.sql_elements.get(e).desc() if asc is False else self.sql_elements.get(e))

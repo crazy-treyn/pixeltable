@@ -22,6 +22,7 @@ from .method_ref import MethodRef
 from .object_ref import ObjectRef
 from .row_builder import ColumnSlotIdx, ExecProfile, RowBuilder
 from .rowid_ref import RowidRef
+from .search_expr import SearchExpr, SearchRankExpr
 from .similarity_expr import SimilarityExpr
 from .sql_element_cache import SqlElementCache
 from .string_op import StringOp

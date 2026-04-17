@@ -382,6 +382,26 @@ class ColumnRef(Expr):
 
         return SimilarityExpr(expr, col_ref=self, idx_name=idx)
 
+    def search(self, query: str, *, idx: str | None = None) -> Expr:
+        """
+        Full-text search against a column that has a PostgreSQL FTS index (see ``Table.add_fts_index``).
+
+        Returns a boolean match expression; use ``.rank`` on the result for relevance (``ts_rank``) ordering.
+
+        Args:
+            query: Search string (passed to ``websearch_to_tsquery``).
+            idx: Optional FTS index name when multiple indexes exist on this column.
+        """
+        from .search_expr import SearchExpr
+
+        if not self.col_type.is_string_type():
+            raise excs.Error(f'search() is only valid for string columns; got {self.col_type}')
+        if not isinstance(query, str):
+            raise excs.Error(f'search(): expected str query; got {type(query).__name__}')
+        expr = Expr.from_object(query)
+        assert expr.col_type.is_string_type()
+        return SearchExpr(expr, col_ref=self, idx_name=idx)
+
     def embedding(self, *, idx: str | None = None) -> ColumnRef:
         """
         Return a reference to the values of an embedding index on this column.
