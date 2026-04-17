@@ -1,23 +1,27 @@
-# /// script
-# requires-python = ">=3.10"
-# dependencies = [
-#     "marimo>=0.20",
-# ]
-# ///
-
 """
 Full-text search (FTS) demo: create a table, add a GIN FTS index, filter and rank with `col.search()`.
 
-Run from the repository root. Install this repo in the same environment as marimo (PEP 723 only pins marimo):
+Use your existing Python environment (the one where you develop Pixeltable). Install marimo into it if needed:
 
-  uv run --with-editable . tool/marimo_fts_demo.py
+  pip install marimo
+  # or: uv pip install marimo
+
+Run from the repository root with `pixeltable` importable (editable install is typical):
+
+  pip install -e .
+  python tool/marimo_fts_demo.py
 
 Interactive UI:
 
-  uv run --with-editable . marimo run tool/marimo_fts_demo.py
-  uv run --with-editable . marimo edit tool/marimo_fts_demo.py
+  marimo run tool/marimo_fts_demo.py
+  marimo edit tool/marimo_fts_demo.py
 
-If `pixeltable` is already installed editable (`uv sync` / `pip install -e .`), you can use `uv run tool/marimo_fts_demo.py` instead.
+If you use uv with this repo, prefer the default project env without dev groups (dev pulls optional ML stacks
+that can fail to build, e.g. onnxsim), and add marimo only:
+
+  uv run --no-dev --with marimo marimo edit tool/marimo_fts_demo.py
+
+Avoid `uv run --with-editable .` without `--no-dev`: that can still pull dev extras.
 
 If you use an external DB (`PIXELTABLE_DB_CONNECT_STR`), unset it or use a dedicated environment;
 this notebook configures the same variables as `tests/conftest.py` for local embedded Postgres.
